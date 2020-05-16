@@ -1,0 +1,303 @@
+#!/usr/bin/python
+
+import os
+import sys
+import fnmatch
+import pyexiv2
+import re
+import shutil
+import traceback
+from optparse import OptionParser
+
+from threading import Thread
+
+import SimpleGUI
+import ProgressBars
+
+import hachoir_parser
+import hachoir_metadata
+import hachoir_core.cmd_line
+from hachoir_core import config as HachoirConfig
+HachoirConfig.quiet = True
+
+def GetMovieDate(filename):
+    filename, realname= hachoir_core.cmd_line.unicodeFilename(filename), filename
+    parser=hachoir_parser.createParser(filename, realname)
+    metadata=hachoir_metadata.extractMetadata(parser)
+    for d in metadata:
+        #if len(d)>0:
+        #    print(d.description, len(d), [v.value for v in d.values])
+        #if d.description=="Camera manufacturer" and len(d)==1:
+        #    print(d.values[0].value)
+        if d.description=="Creation date" and len(d)==1:
+            date=d.values[0].value
+            result={"year":date.year,
+                    "month":date.month,
+                    "day":date.day}
+            return result
+    return None
+
+def GetImageDataAndCameraModel(filename):
+    md = pyexiv2.ImageMetadata(filename)
+    md.read()
+    dt=md['Exif.Photo.DateTimeOriginal'].value
+    #dt=md['Exif.Image.DateTime'].value
+    date={"year":dt.year,
+          "month":dt.month,
+          "day":dt.day}
+    modelstr=""
+    if "Exif.Image.Model" in md.exif_keys:
+        modelstr=md["Exif.Image.Model"].value.strip().replace(" ","").replace("-","_")+"_"
+    return date, modelstr
+
+def GetThumbName(file_name):
+    file_name, file_ext=os.path.splitext(file_name)
+
+    thumb_file=file_name+'.thm'
+    if os.path.exists(thumb_file):
+        return thumb_file
+
+    thumb_file=file_name+'.THM'
+    if os.path.exists(thumb_file):
+        return thumb_file
+
+    return None
+
+def ImportMedia(source_file, dest_root, overwrite):
+
+    # The directory path containing the file e.g /media/CANON_DC/
+    dir_name, file_name=os.path.split(source_file)
+
+    # The number of the canon directory
+    canon_dir_num=os.path.split(dir_name)[1].lower().replace('canon','')
+
+    file_name, file_ext=os.path.splitext(file_name)
+
+    thumb_file=GetThumbName(source_file)
+
+    canonsplit=re.match('(\w+)_(\d+)', file_name)
+    sonysplit=re.match('(DSC)(\d+)', file_name)
+    nikonsplit=re.match('(DSCN)(\d+)', file_name)
+    goprosplitchap0=re.match('(GOPR)(\d+)', file_name)
+    goprosplitchaps=re.match('(GP)(\d{2})(\d+)', file_name)
+    olympussplit=re.match('(P\w?)(\d+)', file_name)
+
+    if canonsplit:
+        file_type=canonsplit.group(1).upper()
+    elif sonysplit:
+        file_type='DSC'
+    elif nikonsplit:
+        file_type='DSCN'
+    elif goprosplitchap0:
+        gpchap=0
+        gpnum=int(goprosplitchap0.groups()[1])
+        file_type='GOPROMVI'
+    elif goprosplitchaps:
+        gpchap=int(goprosplitchaps.groups()[1])
+        gpnum=int(goprosplitchaps.groups()[2])
+        file_type='GOPROMVI'
+    elif olympussplit:
+        file_type='Olympus'
+    else:
+        file_type='Unknown'
+
+    if file_type=="GOPROMVI":
+        date=GetMovieDate(source_file)
+        dest_name="GoPro_{:04d}_{:02d}{:s}".format(gpnum, gpchap+1, file_ext.lower())
+        mess=ImportFile(source_file, dest_name, date, dest_root, overwrite)
+    elif file_type=='MVI':
+        if thumb_file is not None:
+            date, modelstr=GetImageDataAndCameraModel(thumb_file)
+            dest_name=modelstr+canon_dir_num+'_'+file_name+file_ext.lower()
+            mess=ImportFile(source_file, dest_name, date, dest_root, overwrite)
+        else:
+            date=GetMovieDate(source_file)
+            if date is None:
+                mess="ERROR FINDING DATE for '%s'" % source_file
+            else:
+                modelstr="CanonEOS70D_"
+                dest_name=modelstr+canon_dir_num+'_'+file_name+file_ext.lower()
+                mess=ImportFile(source_file, dest_name, date, dest_root, overwrite)
+    elif file_type=='IMG':
+        date, modelstr=GetImageDataAndCameraModel(source_file)
+        dest_name=modelstr+canon_dir_num+'_'+file_name+file_ext.lower()
+        mess=ImportFile(source_file, dest_name, date, dest_root, overwrite)
+    elif file_type[0:2]=='ST':
+        date, modelstr=GetImageDataAndCameraModel(source_file)
+        dest_name=modelstr+canon_dir_num+'_'+file_name+file_type[2]+file_ext.lower()
+        mess=ImportFile(source_file, dest_name, date, dest_root, overwrite)
+    elif file_type=='DSC':
+        date, modelstr=GetImageDataAndCameraModel(source_file)
+        dest_name=modelstr+file_name+file_ext.lower()
+        mess=ImportFile(source_file, dest_name, date, dest_root, overwrite)
+    elif file_type=='DSCN':
+        date, modelstr=GetImageDataAndCameraModel(source_file)
+        dest_name=modelstr+file_name+file_ext.lower()
+        mess=ImportFile(source_file, dest_name, date, dest_root, overwrite)
+    elif file_type=='Olympus':
+        if file_ext.lower()==".mov":
+            mess="Olympus MOV not handled %s" % source_file
+            date=GetMovieDate(source_file)
+            if date is None:
+                mess="ERROR FINDING DATE for '%s'" % source_file
+            else:
+                modelstr="E_M10MarkIII_"
+                dest_name=modelstr+file_name+file_ext.lower()
+                mess=ImportFile(source_file, dest_name, date, dest_root, overwrite)
+        else:
+            date, modelstr=GetImageDataAndCameraModel(source_file)
+            dest_name=modelstr+file_name+file_ext.lower()
+            mess=ImportFile(source_file, dest_name, date, dest_root, overwrite)
+    else:
+        mess="Unknown file %s" % source_file
+    #print(mess)
+
+    return mess
+
+
+def ImportFile(source_file, dest_name, date, dest_root, overwrite, test=False):
+
+    if not dest_name:
+        raise RuntimeError, "Could not determine destination name for \"%s\"." % source_file
+    elif not date:
+        raise RuntimeError, "Could not determine date for \"%s\"." % source_file
+
+    dest_dir=os.path.join(dest_root,
+                          "%04d" % date["year"],
+                          "%02d" % date["month"],
+                          "%04d_%02d_%02d" % (date["year"], date["month"], date["day"]))
+    dest_file=os.path.join(dest_dir, dest_name)
+
+    if os.path.exists(dest_file):
+        if overwrite:
+            if not test:
+                copy_file_mkdir(source_file, dest_dir, dest_file)
+            mess="\"%s\" imported - \"%s\" (<b>overwritten</b>)" % (source_file, dest_file)
+        else:
+            mess="\"%s\" skipped - \"%s\" <b>already exists</b>" % (source_file, dest_file)
+    else:
+        if not test:
+            copy_file_mkdir(source_file, dest_dir, dest_file)
+        mess="\"%s\" imported as \"%s\"" % (source_file, dest_file)
+
+    return mess
+
+def copy_file_mkdir(source_file, dest_dir, dest_file):
+
+    if not os.path.isdir(dest_dir):
+        #print "make directory "+dest_dir
+        os.makedirs(dest_dir)
+        if not os.path.isdir(dest_dir):
+            raise IOError, "Could not create directory \"%s\"." % dest_dir
+
+    #print "Copy "+source_file+" to "+dest_file
+    #shutil.move(source_file, dest_file)
+    shutil.copyfile(source_file, dest_file)
+
+def find_images(root_dirs):
+
+    # Extensions to search for (case insensitive)
+    exts=["mov", "jpg", "avi", "cr2", "mp4", "orf"]
+    #exts=["mov"]
+
+    # Find all files with given extensions
+    files=[]
+    for root_dir in root_dirs:
+
+        for roots, dirs, fils in os.walk(root_dir):
+            for f in fils:
+                for ext in exts:
+                    if fnmatch.fnmatch(f.lower(), "*."+ext.lower()):
+                        files.append(os.path.join(roots, f))
+
+    return files
+
+manual="""
+NAME
+    import_photos
+
+SYNOPSIS
+    import_photos directories
+
+DESCRIPTION
+    Import photos and videos from specified location, e.g.
+
+    import_photos /media/CANON_DC.
+
+    Photos will be imported to /media/nas_dan/Photos in directories named according
+    to date found in metadata.
+
+AUTHOR
+    Dan Rolfe
+"""
+
+# Process command line arguments and options
+usage = "usage: %prog [options]"
+parser = OptionParser(usage)
+parser.add_option("-s", "--source", dest="source", default="/media/dan/EOS_DIGITAL",
+                  help="Source root directory")
+parser.add_option("-d", "--dest", dest="dest", default="/media/nas_dan/Photos",
+                  help="Destination root directory")
+parser.add_option("--no-gui", dest="gui", default=True, action="store_false",
+                  help="Use graphical user interface")
+parser.add_option("--overwrite", dest="overwrite", default=False, action="store_true",
+                  help="Overwrite existing files")
+(options, args) = parser.parse_args()
+
+if len(args) > 0:
+    parser.error("Incorrect number of arguments")
+    exit
+
+# Default source root directory
+default_root=options.source
+
+# Default destination directory root
+dest_root=options.dest
+
+if args:
+    root_dirs=args
+else:
+    if os.path.exists(default_root):
+        root_dirs=[default_root]
+    else:
+        print manual
+        sys.exit()
+
+# Find all the canon photo directories in the input directories
+images=sorted(find_images(root_dirs))
+
+# Import files
+if options.gui:
+    bar=SimpleGUI.gui(title="Photo import")
+else:
+    bar=ProgressBars.progress_bar(title="Photo import")
+
+bar.start()
+
+try:
+
+    for i in range(len(images)):
+
+        source_file=images[i]
+        bar.set_text("Doing %d of %d (%s) ..." % (i+1, len(images), source_file))
+        mess=ImportMedia(source_file, dest_root, options.overwrite)
+
+        bar.set_frac((i+1.)/len(images))
+        if options.gui: bar.new_message(mess)
+
+    bar.set_text("Finished")
+
+
+except Exception, mess:
+
+    if options.gui: bar.join()
+    bar.close()
+    traceback.print_exc()
+    sys.exit(1)
+
+if options.gui:
+    bar.enable_quit()
+    bar.new_message("<b>Please close the window.....</b>")
+    bar.join()
+else:
+    bar.close()
