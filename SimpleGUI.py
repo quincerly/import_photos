@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import sys
 import os
@@ -11,10 +11,10 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk
 from threading import Thread
-import thread
+import _thread
 from gi.repository import Pango
 
-_draw_flow_lock=thread.allocate_lock()
+_draw_flow_lock=_thread.allocate_lock()
 
 Gdk.threads_init()
 
