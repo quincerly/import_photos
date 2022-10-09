@@ -174,7 +174,7 @@ def ImportMedia(source_file, dest_root, overwrite):
     return mess
 
 
-def ImportFile(source_file, dest_name, date, dest_root, overwrite, test=False):
+def ImportFile(source_file, dest_name, date, dest_root, overwrite, test=False, move=False):
 
     if not dest_name:
         raise RuntimeError("Could not determine destination name for \"%s\"." % source_file)
@@ -196,22 +196,22 @@ def ImportFile(source_file, dest_name, date, dest_root, overwrite, test=False):
             mess="\"%s\" skipped - \"%s\" <b>already exists</b>" % (source_file, dest_file)
     else:
         if not test:
-            copy_file_mkdir(source_file, dest_dir, dest_file)
-        mess="\"%s\" imported as \"%s\"" % (source_file, dest_file)
+            copy_file_mkdir(source_file, dest_dir, dest_file, move=move)
+        mess='Imported \"{}\"'.format(dest_file)
 
     return mess
 
-def copy_file_mkdir(source_file, dest_dir, dest_file):
+def copy_file_mkdir(source_file, dest_dir, dest_file, move=False):
 
     if not os.path.isdir(dest_dir):
-        #print "make directory "+dest_dir
         os.makedirs(dest_dir)
         if not os.path.isdir(dest_dir):
             raise IOError("Could not create directory \"%s\"." % dest_dir)
 
-    #print "Copy "+source_file+" to "+dest_file
-    #shutil.move(source_file, dest_file)
-    shutil.copyfile(source_file, dest_file)
+    if move:
+        shutil.move(source_file, dest_file)
+    else:
+        shutil.copyfile(source_file, dest_file)
 
 def find_images(root_dirs):
 
