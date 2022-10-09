@@ -191,9 +191,9 @@ def ImportFile(source_file, dest_name, date, dest_root, overwrite, test=False, m
         if overwrite:
             if not test:
                 copy_file_mkdir(source_file, dest_dir, dest_file)
-            mess="\"%s\" imported - \"%s\" (<b>overwritten</b>)" % (source_file, dest_file)
+            mess='Imported <b>overwriting</b> \"{}\"'.format(dest_file)
         else:
-            mess="\"%s\" skipped - \"%s\" <b>already exists</b>" % (source_file, dest_file)
+            mess='<b>Skipped existing</b> "{}"'.format(dest_file)
     else:
         if not test:
             copy_file_mkdir(source_file, dest_dir, dest_file, move=move)
@@ -300,7 +300,7 @@ def Main():
         for i in range(len(images)):
 
             source_file=images[i]
-            bar.set_text("Doing %d of %d (%s) ..." % (i+1, len(images), source_file))
+            bar.set_text("Doing {:d} of {:d} ({:s}) ...".format(i+1, len(images), source_file))
             mess=ImportMedia(source_file, dest_root, options.overwrite)
 
             bar.set_frac((i+1.)/len(images))
