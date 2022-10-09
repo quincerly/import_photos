@@ -84,16 +84,32 @@ def GetThumbName(file_name):
 
 def ImportMedia(source_file, dest_root, overwrite):
 
-    # The directory path containing the file e.g /media/CANON_DC/
+    source_file=os.path.abspath(source_file)
+
     dir_name, file_name=os.path.split(source_file)
+    file_name, file_ext=os.path.splitext(file_name)
+
+    # For newer Canon EOS structure such as on R7
+    eosnewmatch=re.match('.*\/DCIM\/(?P<dirnum>\d{3})EOS(?P<dirext>[\w\d]+)\/(?P<camcode>[\w\d]{4})(?P<imnum>\d{4})', os.path.abspath(source_file))
+    if eosnewmatch:
+        try:
+            date, modelstr=GetImageDataAndCameraModel(source_file)
+        except:
+            if file_ext.lower() in ['.cr3']:
+                date, modelstr=GetImageDataAndCameraModel(os.path.splitext(source_file)[0]+".JPG")
+            else:
+                raise
+        canon_dir_num=eosnewmatch.group('dirnum')
+        dest_name="{}{}_{}{}".format(modelstr, canon_dir_num, file_name, file_ext.lower())
+        mess=ImportFile(source_file, dest_name, date, dest_root, overwrite)
+    return mess
 
     # The number of the canon directory
     canon_dir_num=os.path.split(dir_name)[1].lower().replace('canon','')
 
-    file_name, file_ext=os.path.splitext(file_name)
-
     thumb_file=GetThumbName(source_file)
 
+    eosr7split=re.match('([\w\d]{4}(\d{4}))', filename)
     canonsplit=re.match('(\w+)_(\d+)', file_name)
     sonysplit=re.match('(DSC)(\d+)', file_name)
     nikonsplit=re.match('(DSCN)(\d+)', file_name)
@@ -216,7 +232,7 @@ def copy_file_mkdir(source_file, dest_dir, dest_file, move=False):
 def find_images(root_dirs):
 
     # Extensions to search for (case insensitive)
-    exts=["mov", "jpg", "avi", "cr2", "mp4", "orf"]
+    exts=["mov", "jpg", "avi", "cr2", "cr3", "mp4", "orf"]
     #exts=["mov"]
 
     # Find all files with given extensions
