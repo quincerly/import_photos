@@ -17,6 +17,8 @@ from threading import Thread
 import SimpleGUI
 import ProgressBars
 
+pyexiv2.enableBMFF() # Enables support for Canon CR3 files
+
 def GetMovieDate(filename):
     def tags_get_creation_time(json):
         fmts=[
@@ -97,23 +99,17 @@ def ImportMedia(source_file, dest_root, overwrite):
             date=GetMovieDate(source_file)
             modelstr={"R7": "CanonEOSR7_"}[eosnewmatch.group('dirext')]
         else:
-            try:
-                date, modelstr=GetImageDataAndCameraModel(source_file)
-            except:
-                if file_ext.lower() in ['.cr3']:
-                    date, modelstr=GetImageDataAndCameraModel(os.path.splitext(source_file)[0]+".JPG")
-                else:
-                    raise
+            date, modelstr=GetImageDataAndCameraModel(source_file)
         dest_name="{}{}_{}{}".format(modelstr, canon_dir_num, file_name, file_ext.lower())
         mess=ImportFile(source_file, dest_name, date, dest_root, overwrite)
-    return mess
+        return mess
 
     # The number of the canon directory
     canon_dir_num=os.path.split(dir_name)[1].lower().replace('canon','')
 
     thumb_file=GetThumbName(source_file)
 
-    eosr7split=re.match('([\w\d]{4}(\d{4}))', filename)
+    #eosr7split=re.match('([\w\d]{4}(\d{4}))', file_name)
     canonsplit=re.match('(\w+)_(\d+)', file_name)
     sonysplit=re.match('(DSC)(\d+)', file_name)
     nikonsplit=re.match('(DSCN)(\d+)', file_name)
