@@ -14,10 +14,13 @@ import json
 
 from threading import Thread
 
-import SimpleGUI
-import ProgressBars
+from ImportPhotosGUI import SimpleGUI
+from ImportPhotosGUI import ProgressBars
 
-pyexiv2.enableBMFF() # Enables support for Canon CR3 files
+try:
+    subprocess.check_output(['ffprobe', '--help'], stderr=subprocess.DEVNULL)
+except:
+    raise RuntimeError("Could not find ffprobe. Is ffmpeg installed?")
 
 def GetMovieDate(filename):
     def tags_get_creation_time(json):
@@ -92,7 +95,7 @@ def ImportMedia(source_file, dest_root, overwrite):
     file_name, file_ext=os.path.splitext(file_name)
 
     # For newer Canon EOS structure such as on R7
-    eosnewmatch=re.match('.*\/DCIM\/(?P<dirnum>\d{3})EOS(?P<dirext>[\w\d]+)\/(?P<camcode>[\w\d]{4})(?P<imnum>\d{4})', os.path.abspath(source_file))
+    eosnewmatch=re.match(r'.*/DCIM/(?P<dirnum>\d{3})EOS(?P<dirext>[\w\d]+)/(?P<camcode>[\w\d]{4})(?P<imnum>\d{4})', os.path.abspath(source_file))
     if eosnewmatch:
         canon_dir_num=eosnewmatch.group('dirnum')
         if file_ext.lower()==".mp4":
@@ -104,18 +107,31 @@ def ImportMedia(source_file, dest_root, overwrite):
         mess=ImportFile(source_file, dest_name, date, dest_root, overwrite)
         return mess
 
+    # For newer GoPro structure
+    gopronewmatch=re.match(r'.*/DCIM/(?P<dirnum>\d+)GOPRO/(?P<camcode>\w+)(?P<imnum>\d+)', os.path.abspath(source_file))
+    if gopronewmatch:
+        gopro_dir_num=gopronewmatch.group('dirnum')
+        if file_ext.lower()==".mp4":
+            date=GetMovieDate(source_file)
+            modelstr="GOPRO_"
+        else:
+            date, modelstr=GetImageDataAndCameraModel(source_file)
+        dest_name="{}{}_{}{}".format(modelstr, gopro_dir_num, file_name, file_ext.lower())
+        mess=ImportFile(source_file, dest_name, date, dest_root, overwrite)
+        return mess
+
     # The number of the canon directory
     canon_dir_num=os.path.split(dir_name)[1].lower().replace('canon','')
 
     thumb_file=GetThumbName(source_file)
 
-    #eosr7split=re.match('([\w\d]{4}(\d{4}))', file_name)
-    canonsplit=re.match('(\w+)_(\d+)', file_name)
-    sonysplit=re.match('(DSC)(\d+)', file_name)
-    nikonsplit=re.match('(DSCN)(\d+)', file_name)
-    goprosplitchap0=re.match('(GOPR)(\d+)', file_name)
-    goprosplitchaps=re.match('(GP)(\d{2})(\d+)', file_name)
-    olympussplit=re.match('(P\w?)(\d+)', file_name)
+    #eosr7split=re.match(r'([\w\d]{4}(\d{4}))', file_name)
+    canonsplit=re.match(r'(\w+)_(\d+)', file_name)
+    sonysplit=re.match(r'(DSC)(\d+)', file_name)
+    nikonsplit=re.match(r'(DSCN)(\d+)', file_name)
+    goprosplitchap0=re.match(r'(GOPR)(\d+)', file_name)
+    goprosplitchaps=re.match(r'(GP)(\d{2})(\d+)', file_name)
+    olympussplit=re.match(r'(P\w?)(\d+)', file_name)
 
     if canonsplit:
         file_type=canonsplit.group(1).upper()
@@ -155,7 +171,8 @@ def ImportMedia(source_file, dest_root, overwrite):
                 mess=ImportFile(source_file, dest_name, date, dest_root, overwrite)
     elif file_type=='IMG':
         date, modelstr=GetImageDataAndCameraModel(source_file)
-        dest_name=modelstr+canon_dir_num+'_'+file_name+file_ext.lower()
+        #dest_name=modelstr+canon_dir_num+'_'+file_name+file_ext.lower()
+        dest_name=modelstr+'_'+file_name+file_ext.lower()
         mess=ImportFile(source_file, dest_name, date, dest_root, overwrite)
     elif file_type[0:2]=='ST':
         date, modelstr=GetImageDataAndCameraModel(source_file)
@@ -247,7 +264,7 @@ def find_images(root_dirs):
 
     return files
 
-def Main():
+def main_cli():
 
     manual="""
     NAME
@@ -338,6 +355,3 @@ def Main():
         bar.join()
     else:
         bar.close()
-
-if __name__ == "__main__":
-    Main()
