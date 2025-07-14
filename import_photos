@@ -107,6 +107,19 @@ def ImportMedia(source_file, dest_root, overwrite):
         mess=ImportFile(source_file, dest_name, date, dest_root, overwrite)
         return mess
 
+    # For newer GoPro structure
+    gopronewmatch=re.match('.*\/DCIM\/(?P<dirnum>\d+)GOPRO\/(?P<camcode>\w+)(?P<imnum>\d+)', os.path.abspath(source_file))
+    if gopronewmatch:
+        gopro_dir_num=gopronewmatch.group('dirnum')
+        if file_ext.lower()==".mp4":
+            date=GetMovieDate(source_file)
+            modelstr="GOPRO_"
+        else:
+            date, modelstr=GetImageDataAndCameraModel(source_file)
+        dest_name="{}{}_{}{}".format(modelstr, gopro_dir_num, file_name, file_ext.lower())
+        mess=ImportFile(source_file, dest_name, date, dest_root, overwrite)
+        return mess
+
     # The number of the canon directory
     canon_dir_num=os.path.split(dir_name)[1].lower().replace('canon','')
 
@@ -158,7 +171,8 @@ def ImportMedia(source_file, dest_root, overwrite):
                 mess=ImportFile(source_file, dest_name, date, dest_root, overwrite)
     elif file_type=='IMG':
         date, modelstr=GetImageDataAndCameraModel(source_file)
-        dest_name=modelstr+canon_dir_num+'_'+file_name+file_ext.lower()
+        #dest_name=modelstr+canon_dir_num+'_'+file_name+file_ext.lower()
+        dest_name=modelstr+'_'+file_name+file_ext.lower()
         mess=ImportFile(source_file, dest_name, date, dest_root, overwrite)
     elif file_type[0:2]=='ST':
         date, modelstr=GetImageDataAndCameraModel(source_file)
