@@ -14,8 +14,8 @@ import json
 
 from threading import Thread
 
-import SimpleGUI
-import ProgressBars
+from ImportPhotosGUI import SimpleGUI
+from ImportPhotosGUI import ProgressBars
 
 try:
     subprocess.check_output(['ffprobe', '--help'], stderr=subprocess.DEVNULL)
@@ -264,7 +264,7 @@ def find_images(root_dirs):
 
     return files
 
-def Main():
+def main_cli():
 
     manual="""
     NAME
@@ -355,6 +355,3 @@ def Main():
         bar.join()
     else:
         bar.close()
-
-if __name__ == "__main__":
-    Main()
