@@ -17,7 +17,10 @@ from threading import Thread
 import SimpleGUI
 import ProgressBars
 
-pyexiv2.enableBMFF() # Enables support for Canon CR3 files
+try:
+    subprocess.check_output(['ffprobe', '--help'], stderr=subprocess.DEVNULL)
+except:
+    raise RuntimeError("Could not find ffprobe. Is ffmpeg installed?")
 
 def GetMovieDate(filename):
     def tags_get_creation_time(json):
